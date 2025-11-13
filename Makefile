@@ -14,7 +14,7 @@ GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 
 kill:
-	sudo kill -9 $(sudo lsof -t -i :8088)
+	sudo kill -9 $(sudo lsof -t -i :8080)
 
 # Build the project
 build:

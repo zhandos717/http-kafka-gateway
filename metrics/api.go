@@ -8,8 +8,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// MetricsResponse структура для ответа API метрик
-type MetricsResponse struct {
+// Response MetricsResponse структура для ответа API метрик
+type Response struct {
 	Timestamp int64       `json:"timestamp"`
 	Metrics   interface{} `json:"metrics"`
 }
@@ -158,7 +158,7 @@ func GetMetrics(c *gin.Context) {
 		result["total_messages"] = totalMessages
 	}
 
-	c.JSON(http.StatusOK, MetricsResponse{
+	c.JSON(http.StatusOK, Response{
 		Timestamp: time.Now().Unix(),
 		Metrics:   result,
 	})

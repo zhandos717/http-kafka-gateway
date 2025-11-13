@@ -157,3 +157,70 @@ curl http://localhost:8080/metrics
 - `kafka_gateway_kafka_errors_total` - количество ошибок при отправке в Kafka
 - `kafka_gateway_auth_attempts_total` - количество попыток аутентификации
 - `kafka_gateway_http_response_time_seconds` - время отклика HTTP-эндпоинтов
+
+## Использование с PHP приложениями
+
+Kafka Gateway позволяет PHP приложениям легко интегрироваться с Apache Kafka через простой HTTP API. Это упрощает отправку сообщений в Kafka без необходимости устанавливать и настраивать Kafka клиенты в PHP коде.
+
+### Пример интеграции с PHP
+
+```php
+<?php
+function sendToKafka($topic, $message, $apiKey) {
+    $data = [
+        'topic' => $topic,
+        'key' => 'message-key',
+        'value' => $message,
+        'headers' => [
+            'source' => 'php-app',
+            'timestamp' => time()
+        ]
+    ];
+
+    $options = [
+        'http' => [
+            'header' => [
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . $apiKey
+            ],
+            'method' => 'POST',
+            'content' => json_encode($data)
+        ]
+    ];
+
+    $context = stream_context_create($options);
+    $result = file_get_contents('http://localhost:8080/message', false, $context);
+    
+    return json_decode($result, true);
+}
+
+// Использование
+$apiKey = 'your-api-key-here';
+$result = sendToKafka('user-events', ['userId' => 123, 'action' => 'login'], $apiKey);
+if ($result['success']) {
+    echo "Сообщение успешно отправлено в Kafka";
+} else {
+    echo "Ошибка при отправке: " . $result['error'];
+}
+?>
+```
+
+Преимущества использования Kafka Gateway с PHP:
+- Упрощенная интеграция без установки дополнительных библиотек
+- Централизованное управление доступом через API-ключи
+- Надежная отправка сообщений с обработкой ошибок
+- Мониторинг и логирование всех операций
+
+## Покрытие тестами
+
+| Пакет | Покрытие |
+|-------|----------|
+| config | 93.3% |
+| handlers | 79.6% |
+| kafka | 80.0% |
+| logger | 100.0% |
+| middleware | 100.0% |
+| utils | 92.3% |
+| cmd/kafkaGateway | 0.0% |
+| metrics | 0.0% |
+| models | - |
