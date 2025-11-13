@@ -31,6 +31,45 @@ API_KEYS=your-api-key-here
 go run main.go
 ```
 
+## Использование Makefile
+
+Для удобства управления проектом доступен Makefile с основными командами:
+
+```bash
+# Сборка проекта
+make build
+
+# Запуск проекта
+make run
+
+# Установка зависимостей
+make deps
+
+# Запуск тестов
+make test
+
+# Запуск тестов с покрытием
+make test-coverage
+
+# Очистка артефактов сборки
+make clean
+
+# Форматирование кода
+make fmt
+
+# Проверка кода с помощью go vet
+make vet
+
+# Сборка для разных платформ
+make build-linux    # Сборка для Linux
+make build-windows  # Сборка для Windows
+make build-macos    # Сборка для macOS
+make build-all      # Сборка для всех платформ
+
+# Просмотр всех доступных команд
+make help
+```
+
 ## Использование
 
 ### Отправка сообщения в Kafka

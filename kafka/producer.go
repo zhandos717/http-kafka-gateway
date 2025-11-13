@@ -8,8 +8,14 @@ import (
 	"go.uber.org/zap"
 )
 
+// WriterInterface определяет интерфейс для Kafka Writer
+type WriterInterface interface {
+	WriteMessages(ctx context.Context, msgs ...kafka.Message) error
+	Close() error
+}
+
 type Producer struct {
-	writer *kafka.Writer
+	writer WriterInterface
 	logger *zap.Logger
 }
 
@@ -22,6 +28,7 @@ func NewProducer(brokers string, logger *zap.Logger) *Producer {
 		RequiredAcks:           kafka.RequireAll,
 		MaxAttempts:            3,
 		AllowAutoTopicCreation: true,
+		// Указываем топик как пустую строку, так как будем указывать его в каждом сообщении
 	}
 
 	return &Producer{
@@ -32,6 +39,7 @@ func NewProducer(brokers string, logger *zap.Logger) *Producer {
 
 func (p *Producer) SendMessage(topic string, key, value []byte) error {
 	message := kafka.Message{
+		Topic: topic, // Указываем топик в сообщении
 		Key:   key,
 		Value: value,
 		Time:  time.Now(),
@@ -63,6 +71,7 @@ func (p *Producer) SendMessageWithHeaders(topic string, key, value []byte, heade
 	}
 
 	message := kafka.Message{
+		Topic:   topic, // Указываем топик в сообщении
 		Key:     key,
 		Value:   value,
 		Headers: kafkaHeaders,

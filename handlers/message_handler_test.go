@@ -183,3 +183,55 @@ type KafkaError struct {
 func (e *KafkaError) Error() string {
 	return e.msg
 }
+
+// Тест для проверки, что топик указывается правильно при отправке сообщения
+func TestMessageHandler_SendMessageTopicSpecification(t *testing.T) {
+	logger, _ := zap.NewDevelopment()
+	defer logger.Sync()
+
+	gin.SetMode(gin.TestMode)
+
+	// Переменная для хранения полученного топика
+	var receivedTopic string
+
+	// Создаем мок продюсера, который сохраняет полученный топик
+	mockProducer := &ProducerMock{
+		MockSendMessage: func(topic string, key, value []byte) error {
+			receivedTopic = topic
+			return nil
+		},
+		MockSendMessageWithHeaders: func(topic string, key, value []byte, headers map[string]string) error {
+			receivedTopic = topic
+			return nil
+		},
+	}
+
+	handler := NewMessageHandler(mockProducer, logger)
+
+	// Подготовка запроса с топиком
+	request := models.MessageRequest{
+		Topic: "test-topic-for-verification",
+		Key:   "test-key",
+		Value: "test-value",
+	}
+	jsonData, _ := json.Marshal(request)
+	req, _ := http.NewRequest("POST", "/message", bytes.NewBuffer(jsonData))
+	req.Header.Set("Content-Type", "application/json")
+
+	// Создание контекста Gin
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = req
+
+	// Вызов обработчика
+	handler.SendMessage(c)
+
+	// Проверяем, что топик был передан правильно
+	if receivedTopic != "test-topic-for-verification" {
+		t.Errorf("Expected topic 'test-topic-for-verification', got '%s'", receivedTopic)
+	}
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d. Response body: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+}
