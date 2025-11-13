@@ -2,13 +2,14 @@ package metrics
 
 import (
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// Response MetricsResponse структура для ответа API метрик
+// Response структура для ответа API метрик
 type Response struct {
 	Timestamp int64       `json:"timestamp"`
 	Metrics   interface{} `json:"metrics"`
@@ -27,50 +28,15 @@ type MessageInfo struct {
 	Status    string    `json:"status"`
 }
 
-// В реальном приложении здесь будет глобальная переменная или структура для хранения данных
-// Но для демонстрационных целей мы создадим фиктивные данные
-var (
-	// topicsList список топиков
-	topicsList = []TopicInfo{
-		{Name: "default-topic", MessageCount: 100},
-		{Name: "user-events", MessageCount: 50},
-		{Name: "system-logs", MessageCount: 75},
-		{Name: "notifications", MessageCount: 25},
-		{Name: "analytics", MessageCount: 120},
-	}
-
-	// recentMessages список недавних сообщений
-	recentMessages = []MessageInfo{
-		{Topic: "default-topic", Timestamp: time.Now().Add(-1 * time.Minute), Status: "success"},
-		{Topic: "user-events", Timestamp: time.Now().Add(-2 * time.Minute), Status: "success"},
-		{Topic: "system-logs", Timestamp: time.Now().Add(-3 * time.Minute), Status: "error"},
-		{Topic: "default-topic", Timestamp: time.Now().Add(-4 * time.Minute), Status: "success"},
-		{Topic: "notifications", Timestamp: time.Now().Add(-5 * time.Minute), Status: "success"},
-	}
-)
+// MetricsStore структура для хранения информации о топиках и сообщениях
+type MetricsStore struct {
+	mu sync.RWMutex
+}
 
 // UpdateDemoData обновляет демонстрационные данные для симуляции активности
 func UpdateDemoData() {
-	// Обновляем счётчики сообщений в топиках
-	for i := range topicsList {
-		// Случайное изменение счётчика
-		topicsList[i].MessageCount += int64(1 + time.Now().Nanosecond()%5)
-	}
-
-	// Добавляем новое сообщение и удаляем самое старое, чтобы поддерживать размер
-	newMessage := MessageInfo{
-		Topic:     topicsList[time.Now().Nanosecond()%len(topicsList)].Name,
-		Timestamp: time.Now(),
-		Status:    []string{"success", "error"}[time.Now().Nanosecond()%2],
-	}
-
-	// Добавляем новое сообщение в начало
-	recentMessages = append([]MessageInfo{newMessage}, recentMessages...)
-
-	// Ограничиваем размер списка до 10 элементов
-	if len(recentMessages) > 10 {
-		recentMessages = recentMessages[:10]
-	}
+	// В реальном приложении здесь будет логика обновления данных из Prometheus метрик
+	// Пока оставляем пустой, так как данные будут получаться напрямую из Prometheus
 }
 
 // GetMetrics возвращает метрики в формате JSON для UI
@@ -166,9 +132,47 @@ func GetMetrics(c *gin.Context) {
 
 // GetTopics возвращает список активных топиков
 func GetTopics(c *gin.Context) {
-	// В реальном приложении здесь будет логика получения списка топиков из Kafka
-	// или из внутреннего состояния приложения
-	// Для демонстрации используем фиктивные данные
+	// Получаем метрики из Prometheus и извлекаем информацию о топиках
+	metrics, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to gather metrics",
+		})
+		return
+	}
+
+	// Собираем информацию о топиках из метрик
+	topicsMap := make(map[string]int64)
+	for _, metricFamily := range metrics {
+		metricName := metricFamily.GetName()
+		if metricName == "kafka_gateway_messages_processed_total" {
+			for _, metric := range metricFamily.GetMetric() {
+				labels := metric.GetLabel()
+				topic := ""
+				for _, label := range labels {
+					if label.GetName() == "topic" {
+						topic = label.GetValue()
+						break
+					}
+				}
+				if topic != "" {
+					count := int64(metric.GetCounter().GetValue())
+					if count > topicsMap[topic] {
+						topicsMap[topic] = count
+					}
+				}
+			}
+		}
+	}
+
+	// Преобразуем map в slice
+	var topicsList []TopicInfo
+	for topic, count := range topicsMap {
+		topicsList = append(topicsList, TopicInfo{
+			Name:         topic,
+			MessageCount: count,
+		})
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"topics":    topicsList,
@@ -180,7 +184,46 @@ func GetTopics(c *gin.Context) {
 func GetRecentMessages(c *gin.Context) {
 	// В реальном приложении здесь будет логика получения недавних сообщений
 	// из внутреннего лога или другого источника
-	// Для демонстрации используем фиктивные данные
+	// Пока возвращаем пустой список, так как нам нужно реализовать логику хранения недавних сообщений
+	// или получения их из другого источника
+
+	// Для демонстрации возвращаем последние успешные/ошибочные сообщения из метрик
+	metrics, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to gather metrics",
+		})
+		return
+	}
+
+	var recentMessages []MessageInfo
+	for _, metricFamily := range metrics {
+		metricName := metricFamily.GetName()
+		if metricName == "kafka_gateway_messages_processed_total" {
+			for _, metric := range metricFamily.GetMetric() {
+				labels := metric.GetLabel()
+				topic := ""
+				status := ""
+				for _, label := range labels {
+					if label.GetName() == "topic" {
+						topic = label.GetValue()
+					} else if label.GetName() == "status" {
+						status = label.GetValue()
+					}
+				}
+				if topic != "" && status != "" {
+					count := metric.GetCounter().GetValue()
+					if count > 0 { // Только если есть сообщения с таким статусом
+						recentMessages = append(recentMessages, MessageInfo{
+							Topic:     topic,
+							Timestamp: time.Now(), // В реальности нужно использовать реальное время
+							Status:    status,
+						})
+					}
+				}
+			}
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"messages":  recentMessages,

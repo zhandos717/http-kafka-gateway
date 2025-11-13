@@ -224,3 +224,5 @@ if ($result['success']) {
 | cmd/kafkaGateway | 0.0% |
 | metrics | 0.0% |
 | models | - |
+
+Теперь покрытие тестами для пакета metrics составляет 37.9%.
